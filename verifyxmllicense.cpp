@@ -69,14 +69,23 @@ int Verify(const char *filename)
 		if (rootEl->type != XML_ELEMENT_NODE) continue;
 		cout << "node type: Element, name: "<< rootEl->name << endl;
 
+		map<string, string> data;
+		vector<vector<string> > info;
+
 		for (xmlNode *el = rootEl->children; el; el = el->next)
 		{
 			if(el->type != XML_ELEMENT_NODE) continue;
 			cout << "node type: Element, name: "<< el->name << endl;
 			if(string((const char*)el->name) == string("info"))
 			{
-				vector<vector<string> > info = ParseInfo(el);
+				info = ParseInfo(el);
 				cout << SerialiseKeyPairs(info) << endl;
+			}
+			else
+			{
+				xmlChar* value = xmlNodeListGetString(el->doc, el->children, 1);
+				data[(char *)el->name] = (char *)value;
+				xmlFree(value);
 			}
 
 
