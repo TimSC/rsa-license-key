@@ -15,7 +15,7 @@ void GenKeyPair()
 	// otherwise, an appropriate typedef'ed type from rsa.h would have been used.
 	AutoSeededRandomPool rng;
 	InvertibleRSAFunction privkey;
-	privkey.Initialize(rng, 3072);
+	privkey.Initialize(rng, 1024*8);
 
 	// With the current version of Crypto++, MessageEnd() needs to be called
 	// explicitly because Base64Encoder doesn't flush its buffer on destruction.
