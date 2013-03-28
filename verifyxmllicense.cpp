@@ -3,9 +3,16 @@
 #include <iostream>
 #include <map>
 #include <vector>
+#include <sstream>
+#include <stdexcept>
 using namespace std;
 #include <libxml/parser.h>
 #include <libxml/tree.h>
+#include <crypto++/rsa.h>
+#include <crypto++/osrng.h>
+#include <crypto++/base64.h>
+#include <crypto++/files.h>
+using namespace CryptoPP;
 
 vector<vector<string> > ParseInfo(xmlNode *el)
 {
@@ -50,6 +57,65 @@ string SerialiseKeyPairs(vector<vector<std::string> > &info)
 	return out;
 }
 
+int VerifyLicense(string signedTxt, string sigIn, string pubKeyEnc)
+{
+	//Read public key
+	CryptoPP::ByteQueue bytes;
+	StringSource file(pubKeyEnc, true, new Base64Decoder);
+	file.TransferTo(bytes);
+	bytes.MessageEnd();
+	RSA::PublicKey pubKey;
+	pubKey.Load(bytes);
+
+	RSASSA_PKCS1v15_SHA_Verifier verifier(pubKey);
+
+	//Read signed message
+	CryptoPP::ByteQueue sig;
+	StringSource sigFile(sigIn, true, new Base64Decoder);
+	string sigStr;
+	StringSink sigStrSink(sigStr);
+	sigFile.TransferTo(sigStrSink);
+
+	string combined(signedTxt);
+	combined.append(sigStr);
+
+	//Verify signature
+	try
+	{
+		StringSource(combined, true,
+			new SignatureVerificationFilter(
+				verifier, NULL,
+				SignatureVerificationFilter::THROW_EXCEPTION
+		   )
+		);
+	}
+	catch(SignatureVerificationFilter::SignatureVerificationFailed &err)
+	{
+		cout << err.what() << endl;
+		return 0;
+	}
+	return 1;
+}
+
+string GetFileContent(string filename)
+{
+	ifstream fi(filename.c_str());
+	if(!fi)
+	{
+		runtime_error("Could not open file");
+	}
+
+    // get length of file:
+    fi.seekg (0, fi.end);
+    int length = fi.tellg();
+    fi.seekg (0, fi.beg);
+
+	stringstream test;
+	test << fi.rdbuf();
+
+	return test.str();
+}
+
 int Verify(const char *filename)
 {
 	//parse the file and get the DOM 
@@ -63,23 +129,20 @@ int Verify(const char *filename)
 
 	//Get the root element node
 	xmlNode *root_element = xmlDocGetRootElement(doc);
+	map<string, string> data;
+	vector<vector<string> > info;
 
+	//Iterate over xml elements
 	for (xmlNode *rootEl = root_element; rootEl; rootEl = rootEl->next)
 	{
 		if (rootEl->type != XML_ELEMENT_NODE) continue;
-		cout << "node type: Element, name: "<< rootEl->name << endl;
-
-		map<string, string> data;
-		vector<vector<string> > info;
-
 		for (xmlNode *el = rootEl->children; el; el = el->next)
 		{
 			if(el->type != XML_ELEMENT_NODE) continue;
-			cout << "node type: Element, name: "<< el->name << endl;
+			//cout << "node type: Element, name: "<< el->name << endl;
 			if(string((const char*)el->name) == string("info"))
 			{
 				info = ParseInfo(el);
-				cout << SerialiseKeyPairs(info) << endl;
 			}
 			else
 			{
@@ -87,10 +150,22 @@ int Verify(const char *filename)
 				data[(char *)el->name] = (char *)value;
 				xmlFree(value);
 			}
-
-
 		}
 	}
+
+	//Print found elements
+	cout << SerialiseKeyPairs(info) << endl;
+	map<string, string>::iterator it;
+	for(it = data.begin(); it != data.end(); it++)
+	{
+		cout << it->first << endl;
+	}
+
+	string masterPubKey = GetFileContent("master-pubkey.txt");
+	
+
+	cout << "Info signature ret:" << VerifyLicense(SerialiseKeyPairs(info), data["infosig"], data["key"]) << endl;
+	cout << "Key signature ret:" << VerifyLicense(data["key"], data["keysig"], masterPubKey) << endl;
 
 	//free the document
 	xmlFreeDoc(doc);
