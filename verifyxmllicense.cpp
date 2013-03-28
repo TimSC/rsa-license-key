@@ -1,9 +1,54 @@
 //g++ -I/usr/include/libxml2 verifyxmllicense.cpp -lcrypto++ -lxml2 -o verifyxmllicense
 
-#include <stdio.h>
+#include <iostream>
+#include <map>
+#include <vector>
+using namespace std;
 #include <libxml/parser.h>
 #include <libxml/tree.h>
 
+vector<vector<string> > ParseInfo(xmlNode *el)
+{
+	vector<vector<string> > info;
+	for (xmlNode *el2 = el->children; el2; el2 = el2->next)
+	{			
+		map<string, string> data;
+		if (el2->type != XML_ELEMENT_NODE) continue;
+		xmlElement *el2t = (xmlElement *)el2;
+		xmlAttribute *attributes = el2t->attributes;
+		unsigned int i=0;
+		xmlAttribute *attr = &attributes[i];
+		while(attr!=NULL)
+		{
+			xmlChar* value = xmlNodeListGetString(el2t->doc, attr->children, 1);
+			data[(const char *)attr->name] = (const char *)value;
+			xmlFree(value);
+			attr = (xmlAttribute *)attr->next;
+		}
+
+		vector<string> pair;
+		pair.push_back(data["k"]);
+		pair.push_back(data["v"]);
+		info.push_back(pair);
+	}
+
+	return info;
+}
+
+string SerialiseKeyPairs(vector<vector<std::string> > &info)
+{
+	string out;
+	for(unsigned int pairNum = 0;pairNum < info.size();pairNum++)
+	{
+		out.append("<data k=\"");
+		out.append(info[pairNum][0]);
+		out.append("\" v=\"");
+		out.append(info[pairNum][1]);
+		out.append("\" />");
+	}
+
+	return out;
+}
 
 int Verify(const char *filename)
 {
@@ -12,7 +57,7 @@ int Verify(const char *filename)
 
 	if (doc == NULL)
 	{
-		printf("error: could not parse file\n");
+		cout << "error: could not parse file" << endl;
 		return 0;
 	}
 
@@ -22,19 +67,19 @@ int Verify(const char *filename)
 	for (xmlNode *rootEl = root_element; rootEl; rootEl = rootEl->next)
 	{
 		if (rootEl->type != XML_ELEMENT_NODE) continue;
-		printf("node type: Element, name: %s\n", rootEl->name);
+		cout << "node type: Element, name: "<< rootEl->name << endl;
 
 		for (xmlNode *el = rootEl->children; el; el = el->next)
 		{
-			if (el->type != XML_ELEMENT_NODE) continue;
-			printf("node type: Element, name: %s\n", el->name);
-
-			for (xmlNode *el2 = el->children; el2; el2 = el2->next)
-			{			
-				if (el2->type != XML_ELEMENT_NODE) continue;
-				printf("node type: Element, name: %s\n", el2->name);
-
+			if(el->type != XML_ELEMENT_NODE) continue;
+			cout << "node type: Element, name: "<< el->name << endl;
+			if(string((const char*)el->name) == string("info"))
+			{
+				vector<vector<string> > info = ParseInfo(el);
+				cout << SerialiseKeyPairs(info) << endl;
 			}
+
+
 		}
 	}
 
