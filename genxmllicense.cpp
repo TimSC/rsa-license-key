@@ -109,7 +109,10 @@ int main()
 	xml.append("</keysig>");
 	xml.append("</license>");
 	
-	cout << xml << endl;
+	//cout << xml << endl;
+
+	ofstream out("xmllicense.xml");
+	out << xml;
 }
 
 
