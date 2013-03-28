@@ -4,4 +4,5 @@ all:
 	g++ gensecondarypair.cpp -lcrypto++ -o gensecondarypair
 	g++ verifylicense.cpp -lcrypto++ -o verifylicense
 	g++ genxmllicense.cpp -lcrypto++ -o genxmllicense
+	g++ verifyxmllicense.cpp -lcrypto++ -lxml2 -o verifyxmllicense
 
