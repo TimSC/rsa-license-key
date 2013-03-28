@@ -4,6 +4,7 @@
 #include <vector>
 #include <fstream>
 #include <sstream>
+#include <stdexcept>
 using namespace std;
 #include <crypto++/rsa.h>
 #include <crypto++/osrng.h>
@@ -59,7 +60,7 @@ string GetFileContent(string filename)
 	ifstream fi(filename.c_str());
 	if(!fi)
 	{
-
+		runtime_error("Could not open file");
 	}
 
     // get length of file:
