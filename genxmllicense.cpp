@@ -94,7 +94,7 @@ int main()
 	
 	vector<string> pair;
 	pair.push_back("licensee");
-	pair.push_back("John Doe, Big Institute, \"Belgium");
+	pair.push_back("John Doe, Big Institute, Belgium");
 	info.push_back(pair);
 
 	pair.clear();
