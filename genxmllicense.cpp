@@ -5,6 +5,7 @@
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
+#include <algorithm>
 using namespace std;
 #include <crypto++/rsa.h>
 #include <crypto++/osrng.h>
@@ -40,14 +41,27 @@ string SignLicense(AutoSeededRandomPool &rng, string strContents)
 	return out;
 }
 
+void myReplace(std::string& str, const std::string& oldStr, const std::string& newStr)
+{
+	//From http://stackoverflow.com/a/1494435
+	size_t pos = 0;
+	while((pos = str.find(oldStr, pos)) != std::string::npos)
+	{
+		str.replace(pos, oldStr.length(), newStr);
+		pos += newStr.length();
+	}
+}
+
 string SerialiseKeyPairs(vector<vector<std::string> > &info)
 {
 	string out;
 	for(unsigned int pairNum = 0;pairNum < info.size();pairNum++)
 	{
 		out.append("<data k=\"");
+		myReplace(info[pairNum][0], "\"", "&quot;");
 		out.append(info[pairNum][0]);
 		out.append("\" v=\"");
+		myReplace(info[pairNum][1], "\"", "&quot;");
 		out.append(info[pairNum][1]);
 		out.append("\" />");
 	}
