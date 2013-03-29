@@ -27,9 +27,8 @@ void GenKeyPair()
 	// With the current version of Crypto++, MessageEnd() needs to be called
 	// explicitly because Base64Encoder doesn't flush its buffer on destruction.
 	string privKeyDer;
-	Base64Encoder privkeysink(new StringSink(privKeyDer));
-	privkey.DEREncode(privkeysink);
-	privkeysink.MessageEnd();
+	StringSink privKeyDerSink(privKeyDer);
+	privkey.DEREncode(privKeyDerSink);
 
 	//Hash the pass phrase to create 128 bit key
 	string hashedPass;
@@ -40,47 +39,11 @@ void GenKeyPair()
 	byte iv[AES::BLOCKSIZE];
 	rng.GenerateBlock(iv, AES::BLOCKSIZE);
 
-	RSA::PrivateKey privateKey2;
-	StringSource x2(privKeyDer, true, new Base64Decoder);
-	cout << "1" << endl;
-	privateKey2.Load(x2);
-	cout << "done" << endl;
-
-	cout << "IV:";
-	for(unsigned i=0;i<AES::BLOCKSIZE;i++)
-	{
-		cout << (int)(iv[i]) << ",";
-	}
-	cout << endl;
-
-	cout << "Key:";
-	for(unsigned i=0;i<50;i++)
-	{
-		cout << privKeyDer[i];
-	}
-	cout << "...";
-	for(unsigned i=privKeyDer.length()-50;i<privKeyDer.length();i++)
-	{
-		cout << privKeyDer[i];
-	}
-	cout << endl;
-
 	//Encrypt private key
 	CFB_Mode<AES>::Encryption cfbEncryption((const unsigned char*)hashedPass.c_str(), hashedPass.length(), iv);
 	byte encPrivKey[privKeyDer.length()+1];
 	cfbEncryption.ProcessData(encPrivKey, (const byte*)privKeyDer.c_str(), privKeyDer.length());
 	string encPrivKeyStr((char *)encPrivKey, privKeyDer.length());
-
-	byte test[privKeyDer.length()];	
-	CFB_Mode<AES>::Decryption cfbDecryption((const unsigned char*)hashedPass.c_str(), hashedPass.length(), iv);
-	cfbDecryption.ProcessData(test, encPrivKey, privKeyDer.length());
-	cout << privKeyDer.length() << endl;
-
-	RSA::PrivateKey privateKey;
-	StringSource x((const char *)test, privKeyDer.length(), new Base64Decoder);
-	cout << "2" << endl;
-	privateKey.Load(x);
-	cout << "done" << endl;
 
 	//Save private key to file
 	StringSource encPrivKeySrc(encPrivKeyStr, true);

@@ -57,13 +57,6 @@ void SignSecondaryKey(AutoSeededRandomPool &rng, string strContents, string pass
 	bytesIv.MessageEnd();
 	bytesIv.Get(iv, AES::BLOCKSIZE);
 
-	cout << "IV:";
-	for(unsigned i=0;i<AES::BLOCKSIZE;i++)
-	{
-		cout << (int)(iv[i]) << ",";
-	}
-	cout << endl;
-
 	//Hash the pass phrase to create 128 bit key
 	string hashedPass;
 	RIPEMD128 hash;
@@ -73,25 +66,10 @@ void SignSecondaryKey(AutoSeededRandomPool &rng, string strContents, string pass
 	byte test[encMasterPrivKey.length()];
 	CFB_Mode<AES>::Decryption cfbDecryption((const unsigned char*)hashedPass.c_str(), hashedPass.length(), iv);
 	cfbDecryption.ProcessData(test, (byte *)encMasterPrivKey.c_str(), encMasterPrivKey.length());
-	StringSource masterKey(test, encMasterPrivKey.length(), true, new Base64Decoder);
-	cout << encMasterPrivKey.length() << endl;
-
-	cout << "Key:";
-	for(unsigned i=0;i<50;i++)
-	{
-		cout << test[i];
-	}
-	cout << "...";
-	for(unsigned i=encMasterPrivKey.length()-50;i<encMasterPrivKey.length();i++)
-	{
-		cout << test[i];
-	}
-	cout << endl;
+	StringSource masterKey(test, encMasterPrivKey.length(), true, NULL);
 
 	RSA::PrivateKey privateKey;
-	cout << "1" << endl;
 	privateKey.Load(masterKey);
-	cout << "x" << endl;
 
 	//Sign message
 	RSASSA_PKCS1v15_SHA_Signer privkey(privateKey);
