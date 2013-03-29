@@ -41,7 +41,7 @@ void GenKeyPair()
 
 	//Encrypt private key
 	CFB_Mode<AES>::Encryption cfbEncryption((const unsigned char*)hashedPass.c_str(), hashedPass.length(), iv);
-	byte encPrivKey[privKeyDer.length()+1];
+	byte encPrivKey[privKeyDer.length()];
 	cfbEncryption.ProcessData(encPrivKey, (const byte*)privKeyDer.c_str(), privKeyDer.length());
 	string encPrivKeyStr((char *)encPrivKey, privKeyDer.length());
 

@@ -11,17 +11,41 @@ using namespace std;
 #include <crypto++/osrng.h>
 #include <crypto++/base64.h>
 #include <crypto++/files.h>
+#include <crypto++/aes.h>
+#include <crypto++/modes.h>
+#include <crypto++/ripemd.h>
 using namespace CryptoPP;
 
-string SignLicense(AutoSeededRandomPool &rng, string strContents)
+string SignLicense(AutoSeededRandomPool &rng, string strContents, string pass)
 {
 	//Read private key
-	CryptoPP::ByteQueue bytes;
-	FileSource file("secondary-privkey.txt", true, new Base64Decoder);
-	file.TransferTo(bytes);
-	bytes.MessageEnd();
+	string encPrivKey;
+	StringSink encPrivKeySink(encPrivKey);
+	FileSource file("secondary-privkey-enc.txt", true, new Base64Decoder);
+	file.CopyTo(encPrivKeySink);
+
+	//Read initialization vector
+	byte iv[AES::BLOCKSIZE];
+	CryptoPP::ByteQueue bytesIv;
+	FileSource file2("secondary-privkey-iv.txt", true, new Base64Decoder);
+	file2.TransferTo(bytesIv);
+	bytesIv.MessageEnd();
+	bytesIv.Get(iv, AES::BLOCKSIZE);
+
+	//Hash the pass phrase to create 128 bit key
+	string hashedPass;
+	RIPEMD128 hash;
+	StringSource(pass, true, new HashFilter(hash, new StringSink(hashedPass)));
+
+	//Decrypt private key
+	byte test[encPrivKey.length()];
+	CFB_Mode<AES>::Decryption cfbDecryption((const unsigned char*)hashedPass.c_str(), hashedPass.length(), iv);
+	cfbDecryption.ProcessData(test, (byte *)encPrivKey.c_str(), encPrivKey.length());
+	StringSource privateKeySrc(test, encPrivKey.length(), true, NULL);
+
+	//Decode key
 	RSA::PrivateKey privateKey;
-	privateKey.Load(bytes);
+	privateKey.Load(privateKeySrc);
 
 	//Sign message
 	RSASSA_PKCS1v15_SHA_Signer privkey(privateKey);
@@ -90,6 +114,10 @@ string GetFileContent(string filename)
 
 int main()
 {
+	cout << "Enter existing secondary key password" << endl;
+	string pass;
+	cin >> pass;
+
 	vector<vector<std::string> > info;
 	
 	vector<string> pair;
@@ -105,7 +133,7 @@ int main()
 	string serialisedInfo = SerialiseKeyPairs(info);
 
 	AutoSeededRandomPool rng;
-	string infoSig = SignLicense(rng, serialisedInfo);
+	string infoSig = SignLicense(rng, serialisedInfo, pass);
 
 	//Encode as xml
 	string xml="<license>";
