@@ -73,7 +73,7 @@ void SignSecondaryKey(AutoSeededRandomPool &rng, string strContents, string pass
 	byte test[encMasterPrivKey.length()];
 	CFB_Mode<AES>::Decryption cfbDecryption((const unsigned char*)hashedPass.c_str(), hashedPass.length(), iv);
 	cfbDecryption.ProcessData(test, (byte *)encMasterPrivKey.c_str(), encMasterPrivKey.length());
-	StringSource masterKey(test, encMasterPrivKey.length(), new Base64Decoder);
+	StringSource masterKey(test, encMasterPrivKey.length(), true, new Base64Decoder);
 	cout << encMasterPrivKey.length() << endl;
 
 	cout << "Key:";
@@ -89,7 +89,9 @@ void SignSecondaryKey(AutoSeededRandomPool &rng, string strContents, string pass
 	cout << endl;
 
 	RSA::PrivateKey privateKey;
+	cout << "1" << endl;
 	privateKey.Load(masterKey);
+	cout << "x" << endl;
 
 	//Sign message
 	RSASSA_PKCS1v15_SHA_Signer privkey(privateKey);
