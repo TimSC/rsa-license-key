@@ -88,7 +88,7 @@ void SignSecondaryKey(AutoSeededRandomPool &rng, string strContents, string pass
 
 int main()
 {
-	cout << "Enter master key password" << endl;
+	cout << "Enter existing master key password" << endl;
 	string pass;
 	cin >> pass;
 
