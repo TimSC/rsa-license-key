@@ -6,6 +6,9 @@ using namespace std;
 #include <crypto++/osrng.h>
 #include <crypto++/base64.h>
 #include <crypto++/files.h>
+#include <crypto++/aes.h>
+#include <crypto++/modes.h>
+#include <crypto++/ripemd.h>
 using namespace CryptoPP;
 
 string GenKeyPair(AutoSeededRandomPool &rng)
@@ -38,15 +41,55 @@ string GenKeyPair(AutoSeededRandomPool &rng)
 	return pubkeyStr;
 }
 
-void SignSecondaryKey(AutoSeededRandomPool &rng, string strContents)
+void SignSecondaryKey(AutoSeededRandomPool &rng, string strContents, string pass)
 {
 	//Read private key
-	CryptoPP::ByteQueue bytes;
-	FileSource file("master-privkey.txt", true, new Base64Decoder);
-	file.TransferTo(bytes);
-	bytes.MessageEnd();
+	string encMasterPrivKey;
+	StringSink encMasterPrivKeySink(encMasterPrivKey);
+	FileSource file("master-privkey-enc.txt", true, new Base64Decoder);
+	file.CopyTo(encMasterPrivKeySink);
+
+	//Read initialization vector
+	byte iv[AES::BLOCKSIZE];
+	CryptoPP::ByteQueue bytesIv;
+	FileSource file2("master-privkey-iv.txt", true, new Base64Decoder);
+	file2.TransferTo(bytesIv);
+	bytesIv.MessageEnd();
+	bytesIv.Get(iv, AES::BLOCKSIZE);
+
+	cout << "IV:";
+	for(unsigned i=0;i<AES::BLOCKSIZE;i++)
+	{
+		cout << (int)(iv[i]) << ",";
+	}
+	cout << endl;
+
+	//Hash the pass phrase to create 128 bit key
+	string hashedPass;
+	RIPEMD128 hash;
+	StringSource(pass, true, new HashFilter(hash, new StringSink(hashedPass)));
+
+	//Decrypt master key
+	byte test[encMasterPrivKey.length()];
+	CFB_Mode<AES>::Decryption cfbDecryption((const unsigned char*)hashedPass.c_str(), hashedPass.length(), iv);
+	cfbDecryption.ProcessData(test, (byte *)encMasterPrivKey.c_str(), encMasterPrivKey.length());
+	StringSource masterKey(test, encMasterPrivKey.length(), new Base64Decoder);
+	cout << encMasterPrivKey.length() << endl;
+
+	cout << "Key:";
+	for(unsigned i=0;i<50;i++)
+	{
+		cout << test[i];
+	}
+	cout << "...";
+	for(unsigned i=encMasterPrivKey.length()-50;i<encMasterPrivKey.length();i++)
+	{
+		cout << test[i];
+	}
+	cout << endl;
+
 	RSA::PrivateKey privateKey;
-	privateKey.Load(bytes);
+	privateKey.Load(masterKey);
 
 	//Sign message
 	RSASSA_PKCS1v15_SHA_Signer privkey(privateKey);
@@ -65,9 +108,13 @@ void SignSecondaryKey(AutoSeededRandomPool &rng, string strContents)
 
 int main()
 {
+	cout << "Enter master key password" << endl;
+	string pass;
+	cin >> pass;
+
 	AutoSeededRandomPool rng;
 	string pubkey = GenKeyPair(rng);
-	SignSecondaryKey(rng, pubkey);
+	SignSecondaryKey(rng, pubkey, pass);
 }
 
 
