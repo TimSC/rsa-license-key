@@ -13,7 +13,7 @@ using namespace CryptoPP;
 
 void GenKeyPair()
 {
-	cout << "Enter master key password" << endl;
+	cout << "Enter new master key password" << endl;
 	string pass;
 	cin >> pass;
 
