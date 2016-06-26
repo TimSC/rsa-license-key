@@ -9,9 +9,9 @@ On debian/ubuntu/mint:
 
 Compile using "make"
 
-genmasterpair - to generate master keys
+genmasterpair - to generate master keys. Keep the private master key ultra secure.
 
-gensecondarypair - to generate a secondary key that is signed by the master key
+gensecondarypair - to generate a secondary key that is signed by the master key. Keep the secondary master key secure, but if it is compromised, it can be revoked.
 
 genxmllicense and genlicense - generate license files that are signed by the secondary key (which is in turn signed by the master key)
 
