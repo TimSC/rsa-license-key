@@ -9,7 +9,7 @@ On debian/ubuntu/mint:
 
 Compile using "make"
 
-genmasterpair - to generate master keys. Keep the private master key ultra secure.
+genmasterpair - to generate master keys. Keep the private master key in an ultra secure place.
 
 gensecondarypair - to generate a secondary key that is signed by the master key. Keep the secondary master key secure, but if it is compromised, it can be revoked.
 
