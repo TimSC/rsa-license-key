@@ -7,7 +7,9 @@ chain:
 
 1. A master key signs a secondary public key.
 2. The secondary key signs license data.
-3. Verifiers check both the license signature and the secondary-key signature.
+3. Verifiers check both the license signature and the secondary-key signature. 
+This code is intended to be incorporated into a larger program that you wish 
+to protect.
 
 Ed25519 is the default signing algorithm. RSA-PSS with SHA-256 is also
 available for users who need RSA keys.
@@ -178,25 +180,6 @@ keys is detected before decrypted bytes are parsed as key material.
 
 The current file format stores encrypted key material, nonce/IV, and salt as
 separate files. Treat all files belonging to a key as one unit.
-
-Windows Web Check Helper
-------------------------
-
-`winwebcheck.cpp` is a Windows-only helper for checking a key against an HTTPS
-endpoint. It sends the key in a POST body and requires the server response to
-be signed with Ed25519.
-
-Before using it, set `LICENSE_RESPONSE_PUBKEY_BASE64` to the server response
-signing public key. The expected response body is:
-
-    1
-    <base64 Ed25519 signature>
-
-The signature is over:
-
-    license-response:v1
-    key=<key>
-    status=1
 
 Key Revocation
 --------------
