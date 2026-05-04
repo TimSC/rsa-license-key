@@ -36,6 +36,8 @@ The tests exercise:
 - RSA-PSS/SHA-256 master/secondary/license generation and verification.
 - Plain-text and XML license verification.
 - Rejection of tampered encrypted private-key material.
+- Rejection of licenses whose secondary key appears in `revoked-keys.txt`.
+- Rejection of licenses where the secondary key was certified by a different master key.
 
 Tools
 -----
@@ -69,6 +71,15 @@ the detected master key type.
 The tool autodetects whether the working directory contains an Ed25519 or RSA
 master key chain. It expects exactly one key type to be present.
 
+After generating the key pair, the tool prints the secondary key's unique
+identifier:
+
+    Key ID: 3A9F2C...
+
+The key ID is the SHA-256 fingerprint of the raw public key bytes, encoded as
+uppercase hex. Record it alongside your key-issuance records so that the key
+can be revoked later if needed.
+
 ### genlicense
 
 Generates a plain-text `license.txt` file and signs it with the detected
@@ -98,6 +109,10 @@ Verifies `license.txt`, the license signature, and the secondary-key signature.
 The verifier autodetects Ed25519 or RSA-PSS/SHA-256 input files. It expects
 exactly one key/signature type to be present and exits nonzero on failure.
 
+If `revoked-keys.txt` is present in the working directory, the secondary key's
+fingerprint is checked against it. A match causes verification to fail with a
+`Key revoked:` message even if all signatures are valid.
+
 ### verifyxmllicense
 
 Verifies `xmllicense.xml`, its license-data signature, and the embedded
@@ -108,6 +123,9 @@ secondary-key signature.
 You can also pass a license file path:
 
     ./verifyxmllicense path/to/xmllicense.xml
+
+Like `verifylicense`, this tool checks `revoked-keys.txt` if the file exists,
+computing the fingerprint from the secondary public key embedded in the XML.
 
 Generated Files
 ---------------
@@ -179,6 +197,23 @@ The signature is over:
     license-response:v1
     key=<key>
     status=1
+
+Key Revocation
+--------------
+
+To revoke a secondary key, add its key ID (printed by `gensecondarypair`) to a
+`revoked-keys.txt` file, one ID per line, in the directory where verification
+runs:
+
+    echo "3A9F2C..." >> revoked-keys.txt
+
+Both `verifylicense` and `verifyxmllicense` check this file on every run. If
+the secondary key used to sign the license matches any entry, verification fails
+regardless of whether the signatures are cryptographically valid.
+
+The key ID is the SHA-256 fingerprint of the raw public key bytes (uppercase
+hex). It is derived solely from the public key, so it is stable and can be
+computed from any copy of the public key file.
 
 Notes and Limitations
 ---------------------
