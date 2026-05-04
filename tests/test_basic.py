@@ -117,12 +117,47 @@ def test_tampered_private_key_fails(tmp_root):
         raise AssertionError(proc.stdout)
 
 
+def test_tampered_plain_license_fails(tmp_root):
+    workdir = tmp_root / "tampered-license"
+    workdir.mkdir()
+
+    run_tool(workdir, "genmasterpair", "masterpass\n")
+    run_tool(workdir, "gensecondarypair", "masterpass\nsecondarypass\n")
+    run_tool(workdir, "genlicense", "secondarypass\nLicensed to BOB\n")
+
+    (workdir / "license.txt").write_text("Licensed to EVE", encoding="utf-8")
+
+    proc = run_tool(workdir, "verifylicense", expect_success=False)
+    if "License Ed25519 Signature OK" in proc.stdout:
+        raise AssertionError(proc.stdout)
+
+
+def test_tampered_xml_license_fails(tmp_root):
+    workdir = tmp_root / "tampered-xml-license"
+    workdir.mkdir()
+
+    run_tool(workdir, "genmasterpair", "masterpass\n")
+    run_tool(workdir, "gensecondarypair", "masterpass\nsecondarypass\n")
+    run_tool(workdir, "genxmllicense", "secondarypass\n")
+
+    xml_path = workdir / "xmllicense.xml"
+    xml = xml_path.read_text(encoding="utf-8")
+    xml = xml.replace("John Doe", "Jane Doe")
+    xml_path.write_text(xml, encoding="utf-8")
+
+    proc = run_tool(workdir, "verifyxmllicense", expect_success=False)
+    if "Info Ed25519 signature ret:1" in proc.stdout:
+        raise AssertionError(proc.stdout)
+
+
 def main():
     tmp_root = Path(tempfile.mkdtemp(prefix="rsa-license-key-tests."))
     try:
         test_ed25519_flow(tmp_root)
         test_rsa_flow(tmp_root)
         test_tampered_private_key_fails(tmp_root)
+        test_tampered_plain_license_fails(tmp_root)
+        test_tampered_xml_license_fails(tmp_root)
     finally:
         shutil.rmtree(tmp_root)
 
