@@ -1,3 +1,5 @@
+.PHONY: all test
+
 all:
 	g++ genlicense.cpp -lcrypto++ -o genlicense
 	g++ genmasterpair.cpp -lcrypto++ -o genmasterpair
@@ -6,3 +8,5 @@ all:
 	g++ genxmllicense.cpp -lcrypto++ -o genxmllicense
 	g++ -I/usr/include/libxml2 verifyxmllicense.cpp -lcrypto++ -lxml2 -o verifyxmllicense
 
+test: all
+	python3 tests/test_basic.py

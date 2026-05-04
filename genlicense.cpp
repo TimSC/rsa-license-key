@@ -4,6 +4,7 @@
 #include <string>
 #include <fstream>
 #include <exception>
+#include <limits>
 using namespace std;
 #include <crypto++/rsa.h>
 #include <crypto++/osrng.h>
@@ -129,7 +130,10 @@ int main()
 	cin >> pass;
 
 	AutoSeededRandomPool rng;
-	string licenseText = "Licensed to BOB";
+	cout << "Enter license text" << endl;
+	cin.ignore(numeric_limits<streamsize>::max(), '\n');
+	string licenseText;
+	getline(cin, licenseText);
 
 	try
 	{
