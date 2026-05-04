@@ -7,8 +7,17 @@
 #include <String>
 #include <cctype>
 #include <cstring>
+#include <crypto++/base64.h>
+#include <crypto++/filters.h>
+#include <crypto++/queue.h>
+#include <crypto++/xed25519.h>
 
 #pragma comment(lib, "WinINet.lib")
+
+// Server response body must be: "1\n<base64 signature>".
+// Signature is Ed25519 over: "license-response:v1\nkey=<key>\nstatus=1".
+// Base64-encoded DER Ed25519 public key used to verify server responses.
+const char* LICENSE_RESPONSE_PUBKEY_BASE64 = "";
 
 bool IsUnreservedUrlChar(unsigned char c) {
     return std::isalnum(c) || c == '-' || c == '.' || c == '_' || c == '~';
@@ -136,6 +145,53 @@ std::string PostKey(std::string endpoint, std::string key) {
     return TrimWhitespace(rtn);
 }
 
+bool VerifySignedResponse(const std::string& key, const std::string& response) {
+    size_t separator = response.find('\n');
+    if (separator == std::string::npos) {
+        return false;
+    }
+
+    std::string status = TrimWhitespace(response.substr(0, separator));
+    std::string signatureBase64 = TrimWhitespace(response.substr(separator + 1));
+    if (status != "1" || signatureBase64.empty() || strlen(LICENSE_RESPONSE_PUBKEY_BASE64) == 0) {
+        return false;
+    }
+
+    try {
+        CryptoPP::ByteQueue publicKeyBytes;
+        CryptoPP::StringSource publicKeySource(
+            LICENSE_RESPONSE_PUBKEY_BASE64,
+            true,
+            new CryptoPP::Base64Decoder);
+        publicKeySource.TransferTo(publicKeyBytes);
+        publicKeyBytes.MessageEnd();
+
+        CryptoPP::ed25519PublicKey publicKey;
+        publicKey.Load(publicKeyBytes);
+        CryptoPP::ed25519::Verifier verifier(publicKey);
+
+        std::string signature;
+        CryptoPP::StringSource signatureSource(
+            signatureBase64,
+            true,
+            new CryptoPP::Base64Decoder(new CryptoPP::StringSink(signature)));
+
+        std::string signedMessage = "license-response:v1\nkey=" + key + "\nstatus=" + status;
+        std::string combined = signedMessage + signature;
+        CryptoPP::StringSource verificationSource(
+            combined,
+            true,
+            new CryptoPP::SignatureVerificationFilter(
+                verifier,
+                NULL,
+                CryptoPP::SignatureVerificationFilter::THROW_EXCEPTION));
+        return true;
+    }
+    catch (CryptoPP::Exception&) {
+        return false;
+    }
+}
+
 std::string keychecker() {
     std::string key;
     std::cout << "Enter Key: ";
@@ -147,7 +203,7 @@ void auth() {
     std::string hostfile = "https://example.com/check-license"; // HTTPS endpoint that accepts POST field "key".
     std::string hot = keychecker();
     std::string result = PostKey(hostfile, hot);
-    if (result == "1") {
+    if (VerifySignedResponse(hot, result)) {
         std::cout << "Whitelisted Key\n"; //Success message.
     }
     else {

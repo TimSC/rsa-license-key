@@ -9,27 +9,53 @@ using namespace std;
 #include <crypto++/base64.h>
 #include <crypto++/files.h>
 #include <crypto++/aes.h>
-#include <crypto++/modes.h>
-#include <crypto++/ripemd.h>
+#include <crypto++/gcm.h>
+#include <crypto++/filters.h>
+#include <crypto++/pwdbased.h>
+#include <crypto++/sha.h>
 #include <crypto++/xed25519.h>
 using namespace CryptoPP;
 
+const unsigned int PBKDF2_ITERATIONS = 200000;
+const unsigned int PBKDF2_SALT_BYTES = 16;
+const unsigned int ENCRYPTION_IV_BYTES = 12;
+
+string SaltFilename(const char *encFilename)
+{
+	return string(encFilename) + ".salt";
+}
+
+SecByteBlock DeriveEncryptionKey(string pass, string salt)
+{
+	SecByteBlock key(AES::DEFAULT_KEYLENGTH);
+	PKCS5_PBKDF2_HMAC<SHA256> pbkdf;
+	pbkdf.DeriveKey(
+		key,
+		key.size(),
+		0,
+		(const CryptoPP::byte *)pass.data(),
+		pass.size(),
+		(const CryptoPP::byte *)salt.data(),
+		salt.size(),
+		PBKDF2_ITERATIONS);
+	return key;
+}
+
 void SaveEncrypted(string plaintext, string pass, const char *encFilename, const char *ivFilename, AutoSeededRandomPool &rng)
 {
-	//Hash the pass phrase to create 128 bit key
-	string hashedPass;
-	RIPEMD128 hash;
-	StringSource(pass, true, new HashFilter(hash, new StringSink(hashedPass)));
+	SecByteBlock salt(PBKDF2_SALT_BYTES);
+	rng.GenerateBlock(salt, salt.size());
+	string saltStr((char *)salt.begin(), salt.size());
+	SecByteBlock key = DeriveEncryptionKey(pass, saltStr);
 	
-	// Generate a random IV
-	CryptoPP::byte iv[AES::BLOCKSIZE];
-	rng.GenerateBlock(iv, AES::BLOCKSIZE);
+	SecByteBlock iv(ENCRYPTION_IV_BYTES);
+	rng.GenerateBlock(iv, iv.size());
 
 	//Encrypt private key
-	CFB_Mode<AES>::Encryption cfbEncryption((const unsigned char*)hashedPass.c_str(), hashedPass.length(), iv);
-	CryptoPP::byte encPrivKey[plaintext.length()];
-	cfbEncryption.ProcessData(encPrivKey, (const CryptoPP::byte*)plaintext.c_str(), plaintext.length());
-	string encPrivKeyStr((char *)encPrivKey, plaintext.length());
+	string encPrivKeyStr;
+	GCM<AES>::Encryption encryption;
+	encryption.SetKeyWithIV(key, key.size(), iv, iv.size());
+	StringSource(plaintext, true, new AuthenticatedEncryptionFilter(encryption, new StringSink(encPrivKeyStr)));
 
 	//Save private key to file
 	StringSource encPrivKeySrc(encPrivKeyStr, true);
@@ -38,10 +64,16 @@ void SaveEncrypted(string plaintext, string pass, const char *encFilename, const
 	sink.MessageEnd();
 
 	//Save initialization vector key to file
-	StringSource ivStr(iv, AES::BLOCKSIZE, true);
+	StringSource ivStr(iv, iv.size(), true);
 	Base64Encoder sink2(new FileSink(ivFilename));
 	ivStr.CopyTo(sink2);
 	sink2.MessageEnd();
+
+	//Save password salt
+	StringSource saltSrc(saltStr, true);
+	Base64Encoder sink3(new FileSink(SaltFilename(encFilename).c_str()));
+	saltSrc.CopyTo(sink3);
+	sink3.MessageEnd();
 }
 
 void GenRsaKeyPair(string pass, AutoSeededRandomPool &rng)

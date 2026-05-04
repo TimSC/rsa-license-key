@@ -13,17 +13,41 @@ using namespace std;
 #include <crypto++/base64.h>
 #include <crypto++/files.h>
 #include <crypto++/aes.h>
-#include <crypto++/modes.h>
-#include <crypto++/ripemd.h>
+#include <crypto++/gcm.h>
+#include <crypto++/filters.h>
+#include <crypto++/pwdbased.h>
 #include <crypto++/pssr.h>
 #include <crypto++/sha.h>
 #include <crypto++/xed25519.h>
 using namespace CryptoPP;
 
+const unsigned int PBKDF2_ITERATIONS = 200000;
+
 bool FileExists(const char *filename)
 {
 	ifstream file(filename);
 	return file.good();
+}
+
+string SaltFilename(const char *encFilename)
+{
+	return string(encFilename) + ".salt";
+}
+
+SecByteBlock DeriveEncryptionKey(string pass, string salt)
+{
+	SecByteBlock key(AES::DEFAULT_KEYLENGTH);
+	PKCS5_PBKDF2_HMAC<SHA256> pbkdf;
+	pbkdf.DeriveKey(
+		key,
+		key.size(),
+		0,
+		(const CryptoPP::byte *)pass.data(),
+		pass.size(),
+		(const CryptoPP::byte *)salt.data(),
+		salt.size(),
+		PBKDF2_ITERATIONS);
+	return key;
 }
 
 string ReadEncrypted(string encFilename, string ivFilename, string pass)
@@ -35,23 +59,20 @@ string ReadEncrypted(string encFilename, string ivFilename, string pass)
 	file.CopyTo(encPrivKeySink);
 
 	//Read initialization vector
-	CryptoPP::byte iv[AES::BLOCKSIZE];
-	CryptoPP::ByteQueue bytesIv;
-	FileSource file2(ivFilename.c_str(), true, new Base64Decoder);
-	file2.TransferTo(bytesIv);
-	bytesIv.MessageEnd();
-	bytesIv.Get(iv, AES::BLOCKSIZE);
+	string iv;
+	FileSource file2(ivFilename.c_str(), true, new Base64Decoder(new StringSink(iv)));
 
-	//Hash the pass phrase to create 128 bit key
-	string hashedPass;
-	RIPEMD128 hash;
-	StringSource(pass, true, new HashFilter(hash, new StringSink(hashedPass)));
+	//Read password salt
+	string salt;
+	FileSource saltFile(SaltFilename(encFilename.c_str()).c_str(), true, new Base64Decoder(new StringSink(salt)));
+	SecByteBlock key = DeriveEncryptionKey(pass, salt);
 
 	//Decrypt private key
-	CryptoPP::byte plaintext[encPrivKey.length()];
-	CFB_Mode<AES>::Decryption cfbDecryption((const unsigned char*)hashedPass.c_str(), hashedPass.length(), iv);
-	cfbDecryption.ProcessData(plaintext, (CryptoPP::byte *)encPrivKey.c_str(), encPrivKey.length());
-	return string((char *)plaintext, encPrivKey.length());
+	string plaintext;
+	GCM<AES>::Decryption decryption;
+	decryption.SetKeyWithIV(key, key.size(), (const CryptoPP::byte *)iv.data(), iv.size());
+	StringSource(encPrivKey, true, new AuthenticatedDecryptionFilter(decryption, new StringSink(plaintext)));
+	return plaintext;
 }
 
 string SignLicense(AutoSeededRandomPool &rng, string strContents, string pass)
@@ -105,15 +126,22 @@ string SignLicenseEd25519(AutoSeededRandomPool &rng, string strContents, string 
 	return out;
 }
 
-void myReplace(std::string& str, const std::string& oldStr, const std::string& newStr)
+string XmlAttributeEscape(const string& str)
 {
-	//From http://stackoverflow.com/a/1494435
-	size_t pos = 0;
-	while((pos = str.find(oldStr, pos)) != std::string::npos)
+	string out;
+	for (size_t i = 0; i < str.size(); i++)
 	{
-		str.replace(pos, oldStr.length(), newStr);
-		pos += newStr.length();
+		switch (str[i])
+		{
+			case '&': out.append("&amp;"); break;
+			case '<': out.append("&lt;"); break;
+			case '>': out.append("&gt;"); break;
+			case '"': out.append("&quot;"); break;
+			case '\'': out.append("&apos;"); break;
+			default: out.push_back(str[i]); break;
+		}
 	}
+	return out;
 }
 
 string SerialiseKeyPairs(vector<vector<std::string> > &info)
@@ -122,11 +150,9 @@ string SerialiseKeyPairs(vector<vector<std::string> > &info)
 	for(unsigned int pairNum = 0;pairNum < info.size();pairNum++)
 	{
 		out.append("<data k=\"");
-		myReplace(info[pairNum][0], "\"", "&quot;");
-		out.append(info[pairNum][0]);
+		out.append(XmlAttributeEscape(info[pairNum][0]));
 		out.append("\" v=\"");
-		myReplace(info[pairNum][1], "\"", "&quot;");
-		out.append(info[pairNum][1]);
+		out.append(XmlAttributeEscape(info[pairNum][1]));
 		out.append("\" />");
 	}
 
@@ -174,50 +200,63 @@ int main()
 
 	AutoSeededRandomPool rng;
 
-	bool hasRsaSecondary = FileExists("secondary-privkey-enc.txt") && FileExists("secondary-pubkey.txt");
-	bool hasEdSecondary = FileExists("secondary-ed25519-privkey-enc.txt") && FileExists("secondary-ed25519-pubkey.txt");
-
-	if (hasRsaSecondary == hasEdSecondary)
+	try
 	{
-		cout << "error: expected exactly one secondary key type" << endl;
+		bool hasRsaSecondary = FileExists("secondary-privkey-enc.txt") && FileExists("secondary-privkey-enc.txt.salt") && FileExists("secondary-pubkey.txt");
+		bool hasEdSecondary = FileExists("secondary-ed25519-privkey-enc.txt") && FileExists("secondary-ed25519-privkey-enc.txt.salt") && FileExists("secondary-ed25519-pubkey.txt");
+
+		if (hasRsaSecondary == hasEdSecondary)
+		{
+			cout << "error: expected exactly one secondary key type" << endl;
+			return 1;
+		}
+
+		//Encode as xml
+		string xml="<license>";
+		xml.append("<info>");
+		xml.append(serialisedInfo);
+		xml.append("</info>");
+		if (hasEdSecondary)
+		{
+			string edInfoSig = SignLicenseEd25519(rng, serialisedInfo, pass);
+			xml.append("<edinfosig>");
+			xml.append(edInfoSig);
+			xml.append("</edinfosig>");
+			xml.append("<edkey>");
+			xml.append(GetFileContent("secondary-ed25519-pubkey.txt"));
+			xml.append("</edkey>");
+			xml.append("<edkeysig>");
+			xml.append(GetFileContent("secondary-ed25519-pubkey-sig.txt"));
+			xml.append("</edkeysig>");
+		}
+		else
+		{
+			string infoSig = SignLicense(rng, serialisedInfo, pass);
+			xml.append("<infosig>");
+			xml.append(infoSig);
+			xml.append("</infosig>");
+			xml.append("<key>");
+			xml.append(GetFileContent("secondary-pubkey.txt"));
+			xml.append("</key>");
+			xml.append("<keysig>");
+			xml.append(GetFileContent("secondary-pubkey-sig.txt"));
+			xml.append("</keysig>");
+		}
+		xml.append("</license>");
+		
+		//cout << xml << endl;
+
+		ofstream out("xmllicense.xml");
+		out << xml;
+	}
+	catch(CryptoPP::Exception &err)
+	{
+		cout << "Crypto error: " << err.what() << endl;
 		return 1;
 	}
-
-	//Encode as xml
-	string xml="<license>";
-	xml.append("<info>");
-	xml.append(serialisedInfo);
-	xml.append("</info>");
-	if (hasEdSecondary)
+	catch(std::exception &err)
 	{
-		string edInfoSig = SignLicenseEd25519(rng, serialisedInfo, pass);
-		xml.append("<edinfosig>");
-		xml.append(edInfoSig);
-		xml.append("</edinfosig>");
-		xml.append("<edkey>");
-		xml.append(GetFileContent("secondary-ed25519-pubkey.txt"));
-		xml.append("</edkey>");
-		xml.append("<edkeysig>");
-		xml.append(GetFileContent("secondary-ed25519-pubkey-sig.txt"));
-		xml.append("</edkeysig>");
+		cout << "error: " << err.what() << endl;
+		return 1;
 	}
-	else
-	{
-		string infoSig = SignLicense(rng, serialisedInfo, pass);
-		xml.append("<infosig>");
-		xml.append(infoSig);
-		xml.append("</infosig>");
-		xml.append("<key>");
-		xml.append(GetFileContent("secondary-pubkey.txt"));
-		xml.append("</key>");
-		xml.append("<keysig>");
-		xml.append(GetFileContent("secondary-pubkey-sig.txt"));
-		xml.append("</keysig>");
-	}
-	xml.append("</license>");
-	
-	//cout << xml << endl;
-
-	ofstream out("xmllicense.xml");
-	out << xml;
 }

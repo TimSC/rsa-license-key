@@ -49,15 +49,22 @@ vector<vector<string> > ParseInfo(xmlNode *el)
 	return info;
 }
 
-void myReplace(std::string& str, const std::string& oldStr, const std::string& newStr)
+string XmlAttributeEscape(const string& str)
 {
-	//From http://stackoverflow.com/a/1494435
-	size_t pos = 0;
-	while((pos = str.find(oldStr, pos)) != std::string::npos)
+	string out;
+	for (size_t i = 0; i < str.size(); i++)
 	{
-		str.replace(pos, oldStr.length(), newStr);
-		pos += newStr.length();
+		switch (str[i])
+		{
+			case '&': out.append("&amp;"); break;
+			case '<': out.append("&lt;"); break;
+			case '>': out.append("&gt;"); break;
+			case '"': out.append("&quot;"); break;
+			case '\'': out.append("&apos;"); break;
+			default: out.push_back(str[i]); break;
+		}
 	}
+	return out;
 }
 
 string SerialiseKeyPairs(vector<vector<std::string> > &info)
@@ -66,11 +73,9 @@ string SerialiseKeyPairs(vector<vector<std::string> > &info)
 	for(unsigned int pairNum = 0;pairNum < info.size();pairNum++)
 	{
 		out.append("<data k=\"");
-		myReplace(info[pairNum][0], "\"", "&quot;");
-		out.append(info[pairNum][0]);
+		out.append(XmlAttributeEscape(info[pairNum][0]));
 		out.append("\" v=\"");
-		myReplace(info[pairNum][1], "\"", "&quot;");
-		out.append(info[pairNum][1]);
+		out.append(XmlAttributeEscape(info[pairNum][1]));
 		out.append("\" />");
 	}
 
