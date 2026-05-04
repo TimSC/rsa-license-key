@@ -1,3 +1,4 @@
+// Verify an XML license and its embedded secondary key chain using the detected signature type.
 //g++ -I/usr/include/libxml2 verifyxmllicense.cpp -lcrypto++ -lxml2 -o verifyxmllicense
 
 #include <iostream>
@@ -13,6 +14,9 @@ using namespace std;
 #include <crypto++/osrng.h>
 #include <crypto++/base64.h>
 #include <crypto++/files.h>
+#include <crypto++/pssr.h>
+#include <crypto++/sha.h>
+#include <crypto++/xed25519.h>
 using namespace CryptoPP;
 
 vector<vector<string> > ParseInfo(xmlNode *el)
@@ -85,7 +89,7 @@ int VerifyLicense(string signedTxt, string sigIn, string pubKeyEnc)
 		RSA::PublicKey pubKey;
 		pubKey.Load(bytes);
 
-		RSASSA_PKCS1v15_SHA_Verifier verifier(pubKey);
+		RSASS<PSS, SHA256>::Verifier verifier(pubKey);
 
 		//Read signed message
 		string sigStr;
@@ -95,6 +99,50 @@ int VerifyLicense(string signedTxt, string sigIn, string pubKeyEnc)
 		combined.append(sigStr);
 
 		//Verify signature
+		StringSource(combined, true,
+			new SignatureVerificationFilter(
+				verifier, NULL,
+				SignatureVerificationFilter::THROW_EXCEPTION
+		   )
+		);
+	}
+	catch(SignatureVerificationFilter::SignatureVerificationFailed &err)
+	{
+		cout << err.what() << endl;
+		return 0;
+	}
+	catch(CryptoPP::Exception &err)
+	{
+		cout << "Crypto error: " << err.what() << endl;
+		return 0;
+	}
+	catch(std::exception &err)
+	{
+		cout << "Verification error: " << err.what() << endl;
+		return 0;
+	}
+	return 1;
+}
+
+int VerifyEd25519License(string signedTxt, string sigIn, string pubKeyEnc)
+{
+	try
+	{
+		CryptoPP::ByteQueue bytes;
+		StringSource file(pubKeyEnc, true, new Base64Decoder);
+		file.TransferTo(bytes);
+		bytes.MessageEnd();
+		ed25519PublicKey pubKey;
+		pubKey.Load(bytes);
+
+		ed25519::Verifier verifier(pubKey);
+
+		string sigStr;
+		StringSource sigFile(sigIn, true, new Base64Decoder(new StringSink(sigStr)));
+
+		string combined(signedTxt);
+		combined.append(sigStr);
+
 		StringSource(combined, true,
 			new SignatureVerificationFilter(
 				verifier, NULL,
@@ -198,11 +246,16 @@ int Verify(const char *filename)
 		cout << it->first << endl;
 	}
 
-	if (data.find("infosig") == data.end() ||
-		data.find("key") == data.end() ||
-		data.find("keysig") == data.end())
+	bool hasRsaLicense = data.find("infosig") != data.end() &&
+		data.find("key") != data.end() &&
+		data.find("keysig") != data.end();
+	bool hasEdLicense = data.find("edinfosig") != data.end() &&
+		data.find("edkey") != data.end() &&
+		data.find("edkeysig") != data.end();
+
+	if (hasRsaLicense == hasEdLicense)
 	{
-		cout << "error: license is missing required signature fields" << endl;
+		cout << "error: expected exactly one license signature type" << endl;
 		xmlFreeDoc(doc);
 		return 0;
 	}
@@ -210,7 +263,14 @@ int Verify(const char *filename)
 	string masterPubKey;
 	try
 	{
-		masterPubKey = GetFileContent("master-pubkey.txt");
+		if (hasEdLicense)
+		{
+			masterPubKey = GetFileContent("master-ed25519-pubkey.txt");
+		}
+		else
+		{
+			masterPubKey = GetFileContent("master-pubkey.txt");
+		}
 	}
 	catch(std::exception &err)
 	{
@@ -220,10 +280,22 @@ int Verify(const char *filename)
 	}
 
 	string serialisedInfo = SerialiseKeyPairs(info);
-	int infoRet = VerifyLicense(serialisedInfo, data["infosig"], data["key"]);
-	int keyRet = VerifyLicense(data["key"], data["keysig"], masterPubKey);
-	cout << "Info signature ret:" << infoRet << endl;
-	cout << "Key signature ret:" << keyRet << endl;
+	int infoRet;
+	int keyRet;
+	if (hasEdLicense)
+	{
+		infoRet = VerifyEd25519License(serialisedInfo, data["edinfosig"], data["edkey"]);
+		keyRet = VerifyEd25519License(data["edkey"], data["edkeysig"], masterPubKey);
+		cout << "Info Ed25519 signature ret:" << infoRet << endl;
+		cout << "Key Ed25519 signature ret:" << keyRet << endl;
+	}
+	else
+	{
+		infoRet = VerifyLicense(serialisedInfo, data["infosig"], data["key"]);
+		keyRet = VerifyLicense(data["key"], data["keysig"], masterPubKey);
+		cout << "Info RSA-PSS signature ret:" << infoRet << endl;
+		cout << "Key RSA-PSS signature ret:" << keyRet << endl;
+	}
 
 	//free the document
 	xmlFreeDoc(doc);

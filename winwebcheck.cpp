@@ -1,3 +1,4 @@
+// Windows helper for checking a user-entered key against a remote HTTP endpoint.
 #pragma once
 
 #include <Windows.h>
