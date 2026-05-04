@@ -225,11 +225,15 @@ int VerifySecondaryKey()
 		return 0;
 	}
 
+	int ret;
 	if (hasEdSecondary)
-	{
-		return VerifyEd25519SignatureText(signedTxt, "secondary-ed25519-pubkey-sig.txt", "master-ed25519-pubkey.txt", "Secondary Ed25519 Key OK");
-	}
-	return VerifyRsaSignatureText(signedTxt, "secondary-pubkey-sig.txt", "master-pubkey.txt", "Secondary RSA-PSS Key OK");
+		ret = VerifyEd25519SignatureText(signedTxt, "secondary-ed25519-pubkey-sig.txt", "master-ed25519-pubkey.txt", "Secondary Ed25519 Key OK");
+	else
+		ret = VerifyRsaSignatureText(signedTxt, "secondary-pubkey-sig.txt", "master-pubkey.txt", "Secondary RSA-PSS Key OK");
+
+	if (ret)
+		cout << "Secondary Key ID: " << ComputeKeyId(signedTxt) << endl;
+	return ret;
 }
 
 int main()

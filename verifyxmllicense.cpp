@@ -329,6 +329,8 @@ int Verify(const char *filename)
 
 	string keyContent = hasEdLicense ? data["edkey"] : data["key"];
 	string keyId = ComputeKeyId(keyContent);
+	if (keyRet)
+		cout << "Secondary Key ID: " << keyId << endl;
 	int revRet = 1;
 	if (IsKeyRevoked(keyId))
 	{
