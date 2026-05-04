@@ -36,13 +36,13 @@ void GenKeyPair()
 	StringSource(pass, true, new HashFilter(hash, new StringSink(hashedPass)));
 	
 	// Generate a random IV
-	byte iv[AES::BLOCKSIZE];
+	CryptoPP::byte iv[AES::BLOCKSIZE];
 	rng.GenerateBlock(iv, AES::BLOCKSIZE);
 
 	//Encrypt private key
 	CFB_Mode<AES>::Encryption cfbEncryption((const unsigned char*)hashedPass.c_str(), hashedPass.length(), iv);
-	byte encPrivKey[privKeyDer.length()];
-	cfbEncryption.ProcessData(encPrivKey, (const byte*)privKeyDer.c_str(), privKeyDer.length());
+	CryptoPP::byte encPrivKey[privKeyDer.length()];
+	cfbEncryption.ProcessData(encPrivKey, (const CryptoPP::byte*)privKeyDer.c_str(), privKeyDer.length());
 	string encPrivKeyStr((char *)encPrivKey, privKeyDer.length());
 
 	//Save private key to file
@@ -73,5 +73,4 @@ int main()
 {
 	GenKeyPair();
 }
-
 

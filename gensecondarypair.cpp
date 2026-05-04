@@ -33,13 +33,13 @@ string GenKeyPair(AutoSeededRandomPool &rng, string pass)
 	StringSource(pass, true, new HashFilter(hash, new StringSink(hashedPass)));
 
 	// Generate a random IV
-	byte iv[AES::BLOCKSIZE];
+	CryptoPP::byte iv[AES::BLOCKSIZE];
 	rng.GenerateBlock(iv, AES::BLOCKSIZE);
 
 	//Encrypt private key
 	CFB_Mode<AES>::Encryption cfbEncryption((const unsigned char*)hashedPass.c_str(), hashedPass.length(), iv);
-	byte encPrivKey[privKeyStr.length()];
-	cfbEncryption.ProcessData(encPrivKey, (const byte*)privKeyStr.c_str(), privKeyStr.length());
+	CryptoPP::byte encPrivKey[privKeyStr.length()];
+	cfbEncryption.ProcessData(encPrivKey, (const CryptoPP::byte*)privKeyStr.c_str(), privKeyStr.length());
 	string encPrivKeyStr((char *)encPrivKey, privKeyStr.length());
 
 	//Save private key to file
@@ -79,7 +79,7 @@ void SignSecondaryKey(AutoSeededRandomPool &rng, string strContents, string pass
 	file.CopyTo(encMasterPrivKeySink);
 
 	//Read initialization vector
-	byte iv[AES::BLOCKSIZE];
+	CryptoPP::byte iv[AES::BLOCKSIZE];
 	CryptoPP::ByteQueue bytesIv;
 	FileSource file2("master-privkey-iv.txt", true, new Base64Decoder);
 	file2.TransferTo(bytesIv);
@@ -92,9 +92,9 @@ void SignSecondaryKey(AutoSeededRandomPool &rng, string strContents, string pass
 	StringSource(pass, true, new HashFilter(hash, new StringSink(hashedPass)));
 
 	//Decrypt master key
-	byte test[encMasterPrivKey.length()];
+	CryptoPP::byte test[encMasterPrivKey.length()];
 	CFB_Mode<AES>::Decryption cfbDecryption((const unsigned char*)hashedPass.c_str(), hashedPass.length(), iv);
-	cfbDecryption.ProcessData(test, (byte *)encMasterPrivKey.c_str(), encMasterPrivKey.length());
+	cfbDecryption.ProcessData(test, (CryptoPP::byte *)encMasterPrivKey.c_str(), encMasterPrivKey.length());
 	StringSource masterKey(test, encMasterPrivKey.length(), true, NULL);
 
 	RSA::PrivateKey privateKey;
@@ -105,7 +105,7 @@ void SignSecondaryKey(AutoSeededRandomPool &rng, string strContents, string pass
 	SecByteBlock sbbSignature(privkey.SignatureLength());
 	privkey.SignMessage(
 		rng,
-		(byte const*) strContents.data(),
+		(CryptoPP::byte const*) strContents.data(),
 		strContents.size(),
 		sbbSignature);
 
@@ -129,5 +129,4 @@ int main()
 	string pubkey = GenKeyPair(rng, pass2);
 	SignSecondaryKey(rng, pubkey, pass);
 }
-
 

@@ -9,31 +9,28 @@ using namespace CryptoPP;
 
 int VerifyLicense()
 {
-	//Read public key
-	CryptoPP::ByteQueue bytes;
-	FileSource file("secondary-pubkey.txt", true, new Base64Decoder);
-	file.TransferTo(bytes);
-	bytes.MessageEnd();
-	RSA::PublicKey pubKey;
-	pubKey.Load(bytes);
-
-	RSASSA_PKCS1v15_SHA_Verifier verifier(pubKey);
-
-	//Read signed message
-	string signedTxt;
-	FileSource("license.txt", true, new StringSink(signedTxt));
-	CryptoPP::ByteQueue sig;
-	FileSource sigFile("license-sig.txt", true, new Base64Decoder);
-	string sigStr;
-	StringSink sigStrSink(sigStr);
-	sigFile.TransferTo(sigStrSink);
-
-	string combined(signedTxt);
-	combined.append(sigStr);
-
-	//Verify signature
 	try
 	{
+		//Read public key
+		CryptoPP::ByteQueue bytes;
+		FileSource file("secondary-pubkey.txt", true, new Base64Decoder);
+		file.TransferTo(bytes);
+		bytes.MessageEnd();
+		RSA::PublicKey pubKey;
+		pubKey.Load(bytes);
+
+		RSASSA_PKCS1v15_SHA_Verifier verifier(pubKey);
+
+		//Read signed message
+		string signedTxt;
+		FileSource("license.txt", true, new StringSink(signedTxt));
+		string sigStr;
+		FileSource sigFile("license-sig.txt", true, new Base64Decoder(new StringSink(sigStr)));
+
+		string combined(signedTxt);
+		combined.append(sigStr);
+
+		//Verify signature
 		StringSource(combined, true,
 			new SignatureVerificationFilter(
 				verifier, NULL,
@@ -48,36 +45,43 @@ int VerifyLicense()
 		cout << err.what() << endl;
 		return 0;
 	}
+	catch(CryptoPP::Exception &err)
+	{
+		cout << "Crypto error: " << err.what() << endl;
+		return 0;
+	}
+	catch(std::exception &err)
+	{
+		cout << "Verification error: " << err.what() << endl;
+		return 0;
+	}
 	return 1;
 }
 
 int VerifySecondaryKey()
 {
-	//Read public key
-	CryptoPP::ByteQueue bytes;
-	FileSource file("master-pubkey.txt", true, new Base64Decoder);
-	file.TransferTo(bytes);
-	bytes.MessageEnd();
-	RSA::PublicKey pubKey;
-	pubKey.Load(bytes);
-
-	RSASSA_PKCS1v15_SHA_Verifier verifier(pubKey);
-
-	//Read signed message
-	string signedTxt;
-	FileSource("secondary-pubkey.txt", true, new StringSink(signedTxt));
-	CryptoPP::ByteQueue sig;
-	FileSource sigFile("secondary-pubkey-sig.txt", true, new Base64Decoder);
-	string sigStr;
-	StringSink sigStrSink(sigStr);
-	sigFile.TransferTo(sigStrSink);
-
-	string combined(signedTxt);
-	combined.append(sigStr);
-
-	//Verify signature
 	try
 	{
+		//Read public key
+		CryptoPP::ByteQueue bytes;
+		FileSource file("master-pubkey.txt", true, new Base64Decoder);
+		file.TransferTo(bytes);
+		bytes.MessageEnd();
+		RSA::PublicKey pubKey;
+		pubKey.Load(bytes);
+
+		RSASSA_PKCS1v15_SHA_Verifier verifier(pubKey);
+
+		//Read signed message
+		string signedTxt;
+		FileSource("secondary-pubkey.txt", true, new StringSink(signedTxt));
+		string sigStr;
+		FileSource sigFile("secondary-pubkey-sig.txt", true, new Base64Decoder(new StringSink(sigStr)));
+
+		string combined(signedTxt);
+		combined.append(sigStr);
+
+		//Verify signature
 		StringSource(combined, true,
 			new SignatureVerificationFilter(
 				verifier, NULL,
@@ -92,6 +96,16 @@ int VerifySecondaryKey()
 		cout << err.what() << endl;
 		return 0;
 	}
+	catch(CryptoPP::Exception &err)
+	{
+		cout << "Crypto error: " << err.what() << endl;
+		return 0;
+	}
+	catch(std::exception &err)
+	{
+		cout << "Verification error: " << err.what() << endl;
+		return 0;
+	}
 	return 1;
 }
 
@@ -100,6 +114,6 @@ int main()
 	int ret1 = VerifySecondaryKey();
 	int ret2 = VerifyLicense();
 
+	return (ret1 && ret2) ? 0 : 1;
 }
-
 

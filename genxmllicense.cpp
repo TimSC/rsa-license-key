@@ -25,7 +25,7 @@ string SignLicense(AutoSeededRandomPool &rng, string strContents, string pass)
 	file.CopyTo(encPrivKeySink);
 
 	//Read initialization vector
-	byte iv[AES::BLOCKSIZE];
+	CryptoPP::byte iv[AES::BLOCKSIZE];
 	CryptoPP::ByteQueue bytesIv;
 	FileSource file2("secondary-privkey-iv.txt", true, new Base64Decoder);
 	file2.TransferTo(bytesIv);
@@ -38,9 +38,9 @@ string SignLicense(AutoSeededRandomPool &rng, string strContents, string pass)
 	StringSource(pass, true, new HashFilter(hash, new StringSink(hashedPass)));
 
 	//Decrypt private key
-	byte test[encPrivKey.length()];
+	CryptoPP::byte test[encPrivKey.length()];
 	CFB_Mode<AES>::Decryption cfbDecryption((const unsigned char*)hashedPass.c_str(), hashedPass.length(), iv);
-	cfbDecryption.ProcessData(test, (byte *)encPrivKey.c_str(), encPrivKey.length());
+	cfbDecryption.ProcessData(test, (CryptoPP::byte *)encPrivKey.c_str(), encPrivKey.length());
 	StringSource privateKeySrc(test, encPrivKey.length(), true, NULL);
 
 	//Decode key
@@ -52,7 +52,7 @@ string SignLicense(AutoSeededRandomPool &rng, string strContents, string pass)
 	SecByteBlock sbbSignature(privkey.SignatureLength());
 	privkey.SignMessage(
 		rng,
-		(byte const*) strContents.data(),
+		(CryptoPP::byte const*) strContents.data(),
 		strContents.size(),
 		sbbSignature);
 
@@ -156,5 +156,4 @@ int main()
 	ofstream out("xmllicense.xml");
 	out << xml;
 }
-
 

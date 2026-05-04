@@ -5,6 +5,7 @@
 #include <vector>
 #include <sstream>
 #include <stdexcept>
+#include <fstream>
 using namespace std;
 #include <libxml/parser.h>
 #include <libxml/tree.h>
@@ -17,26 +18,28 @@ using namespace CryptoPP;
 vector<vector<string> > ParseInfo(xmlNode *el)
 {
 	vector<vector<string> > info;
+	if (el == NULL) return info;
+
 	for (xmlNode *el2 = el->children; el2; el2 = el2->next)
 	{			
-		map<string, string> data;
 		if (el2->type != XML_ELEMENT_NODE) continue;
-		xmlElement *el2t = (xmlElement *)el2;
-		xmlAttribute *attributes = el2t->attributes;
-		unsigned int i=0;
-		xmlAttribute *attr = &attributes[i];
-		while(attr!=NULL)
+
+		xmlChar *key = xmlGetProp(el2, (const xmlChar *)"k");
+		xmlChar *value = xmlGetProp(el2, (const xmlChar *)"v");
+		if (key == NULL || value == NULL)
 		{
-			xmlChar* value = xmlNodeListGetString(el2t->doc, attr->children, 1);
-			data[(const char *)attr->name] = (const char *)value;
-			xmlFree(value);
-			attr = (xmlAttribute *)attr->next;
+			if (key != NULL) xmlFree(key);
+			if (value != NULL) xmlFree(value);
+			continue;
 		}
 
 		vector<string> pair;
-		pair.push_back(data["k"]);
-		pair.push_back(data["v"]);
+		pair.push_back((const char *)key);
+		pair.push_back((const char *)value);
 		info.push_back(pair);
+
+		xmlFree(key);
+		xmlFree(value);
 	}
 
 	return info;
@@ -72,29 +75,26 @@ string SerialiseKeyPairs(vector<vector<std::string> > &info)
 
 int VerifyLicense(string signedTxt, string sigIn, string pubKeyEnc)
 {
-	//Read public key
-	CryptoPP::ByteQueue bytes;
-	StringSource file(pubKeyEnc, true, new Base64Decoder);
-	file.TransferTo(bytes);
-	bytes.MessageEnd();
-	RSA::PublicKey pubKey;
-	pubKey.Load(bytes);
-
-	RSASSA_PKCS1v15_SHA_Verifier verifier(pubKey);
-
-	//Read signed message
-	CryptoPP::ByteQueue sig;
-	StringSource sigFile(sigIn, true, new Base64Decoder);
-	string sigStr;
-	StringSink sigStrSink(sigStr);
-	sigFile.TransferTo(sigStrSink);
-
-	string combined(signedTxt);
-	combined.append(sigStr);
-
-	//Verify signature
 	try
 	{
+		//Read public key
+		CryptoPP::ByteQueue bytes;
+		StringSource file(pubKeyEnc, true, new Base64Decoder);
+		file.TransferTo(bytes);
+		bytes.MessageEnd();
+		RSA::PublicKey pubKey;
+		pubKey.Load(bytes);
+
+		RSASSA_PKCS1v15_SHA_Verifier verifier(pubKey);
+
+		//Read signed message
+		string sigStr;
+		StringSource sigFile(sigIn, true, new Base64Decoder(new StringSink(sigStr)));
+
+		string combined(signedTxt);
+		combined.append(sigStr);
+
+		//Verify signature
 		StringSource(combined, true,
 			new SignatureVerificationFilter(
 				verifier, NULL,
@@ -107,6 +107,16 @@ int VerifyLicense(string signedTxt, string sigIn, string pubKeyEnc)
 		cout << err.what() << endl;
 		return 0;
 	}
+	catch(CryptoPP::Exception &err)
+	{
+		cout << "Crypto error: " << err.what() << endl;
+		return 0;
+	}
+	catch(std::exception &err)
+	{
+		cout << "Verification error: " << err.what() << endl;
+		return 0;
+	}
 	return 1;
 }
 
@@ -115,7 +125,7 @@ string GetFileContent(string filename)
 	ifstream fi(filename.c_str());
 	if(!fi)
 	{
-		runtime_error("Could not open file");
+		throw runtime_error("Could not open file");
 	}
 
     // get length of file:
@@ -132,7 +142,7 @@ string GetFileContent(string filename)
 int Verify(const char *filename)
 {
 	//parse the file and get the DOM 
-	xmlDoc *doc = xmlReadFile(filename, NULL, 0);
+	xmlDoc *doc = xmlReadFile(filename, NULL, XML_PARSE_NONET);
 
 	if (doc == NULL)
 	{
@@ -142,6 +152,13 @@ int Verify(const char *filename)
 
 	//Get the root element node
 	xmlNode *root_element = xmlDocGetRootElement(doc);
+	if (root_element == NULL)
+	{
+		cout << "error: empty xml document" << endl;
+		xmlFreeDoc(doc);
+		return 0;
+	}
+
 	map<string, string> data;
 	vector<vector<string> > info;
 
@@ -160,8 +177,15 @@ int Verify(const char *filename)
 			else
 			{
 				xmlChar* value = xmlNodeListGetString(el->doc, el->children, 1);
-				data[(char *)el->name] = (char *)value;
-				xmlFree(value);
+				if (value != NULL)
+				{
+					data[(char *)el->name] = (char *)value;
+					xmlFree(value);
+				}
+				else
+				{
+					data[(char *)el->name] = "";
+				}
 			}
 		}
 	}
@@ -174,23 +198,49 @@ int Verify(const char *filename)
 		cout << it->first << endl;
 	}
 
-	string masterPubKey = GetFileContent("master-pubkey.txt");
-	
+	if (data.find("infosig") == data.end() ||
+		data.find("key") == data.end() ||
+		data.find("keysig") == data.end())
+	{
+		cout << "error: license is missing required signature fields" << endl;
+		xmlFreeDoc(doc);
+		return 0;
+	}
 
-	cout << "Info signature ret:" << VerifyLicense(SerialiseKeyPairs(info), data["infosig"], data["key"]) << endl;
-	cout << "Key signature ret:" << VerifyLicense(data["key"], data["keysig"], masterPubKey) << endl;
+	string masterPubKey;
+	try
+	{
+		masterPubKey = GetFileContent("master-pubkey.txt");
+	}
+	catch(std::exception &err)
+	{
+		cout << err.what() << endl;
+		xmlFreeDoc(doc);
+		return 0;
+	}
+
+	string serialisedInfo = SerialiseKeyPairs(info);
+	int infoRet = VerifyLicense(serialisedInfo, data["infosig"], data["key"]);
+	int keyRet = VerifyLicense(data["key"], data["keysig"], masterPubKey);
+	cout << "Info signature ret:" << infoRet << endl;
+	cout << "Key signature ret:" << keyRet << endl;
 
 	//free the document
 	xmlFreeDoc(doc);
 
-	return 1;
+	return infoRet && keyRet;
 
 }
 
 
-int main()
+int main(int argc, char **argv)
 {
+	const char *filename = "xmllicense.xml";
+	if (argc > 1)
+	{
+		filename = argv[1];
+	}
 
-	Verify("xmllicense.xml");
+	return Verify(filename) ? 0 : 1;
 
 }
