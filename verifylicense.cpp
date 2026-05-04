@@ -9,6 +9,7 @@ using namespace std;
 #include <crypto++/files.h>
 #include <crypto++/pssr.h>
 #include <crypto++/sha.h>
+#include <crypto++/hex.h>
 #include <crypto++/xed25519.h>
 using namespace CryptoPP;
 
@@ -16,6 +17,60 @@ bool FileExists(const char *filename)
 {
 	ifstream file(filename);
 	return file.good();
+}
+
+string ComputeKeyId(const string& pubKeyBase64)
+{
+	string rawKey;
+	StringSource(pubKeyBase64, true, new Base64Decoder(new StringSink(rawKey)));
+	string digest;
+	SHA256 hash;
+	StringSource(rawKey, true, new HashFilter(hash, new HexEncoder(new StringSink(digest))));
+	return digest;
+}
+
+bool IsKeyRevoked(const string& keyId)
+{
+	ifstream f("revoked-keys.txt");
+	if (!f.good()) return false;
+	string line;
+	while (getline(f, line))
+	{
+		if (!line.empty() && line.back() == '\r')
+			line.pop_back();
+		if (line == keyId) return true;
+	}
+	return false;
+}
+
+int CheckRevocation()
+{
+	bool hasEdSecondary = FileExists("secondary-ed25519-pubkey.txt");
+	bool hasRsaSecondary = FileExists("secondary-pubkey.txt");
+
+	string pubKeyBase64;
+	try
+	{
+		if (hasEdSecondary)
+			FileSource("secondary-ed25519-pubkey.txt", true, new StringSink(pubKeyBase64));
+		else if (hasRsaSecondary)
+			FileSource("secondary-pubkey.txt", true, new StringSink(pubKeyBase64));
+		else
+			return 1;
+	}
+	catch (CryptoPP::Exception &err)
+	{
+		cout << "Crypto error reading secondary key: " << err.what() << endl;
+		return 0;
+	}
+
+	string keyId = ComputeKeyId(pubKeyBase64);
+	if (IsKeyRevoked(keyId))
+	{
+		cout << "Key revoked: " << keyId << endl;
+		return 0;
+	}
+	return 1;
 }
 
 int VerifyRsaSignatureText(string signedTxt, string sigFilename, string pubKeyFilename, string okMessage)
@@ -181,6 +236,7 @@ int main()
 {
 	int ret1 = VerifySecondaryKey();
 	int ret2 = VerifyLicense();
+	int ret3 = CheckRevocation();
 
-	return (ret1 && ret2) ? 0 : 1;
+	return (ret1 && ret2 && ret3) ? 0 : 1;
 }

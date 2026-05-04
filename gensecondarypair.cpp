@@ -16,6 +16,7 @@ using namespace std;
 #include <crypto++/pwdbased.h>
 #include <crypto++/pssr.h>
 #include <crypto++/sha.h>
+#include <crypto++/hex.h>
 #include <crypto++/xed25519.h>
 using namespace CryptoPP;
 
@@ -27,6 +28,16 @@ bool FileExists(const char *filename)
 {
 	ifstream file(filename);
 	return file.good();
+}
+
+string ComputeKeyId(const string& pubKeyBase64)
+{
+	string rawKey;
+	StringSource(pubKeyBase64, true, new Base64Decoder(new StringSink(rawKey)));
+	string digest;
+	SHA256 hash;
+	StringSource(rawKey, true, new HashFilter(hash, new HexEncoder(new StringSink(digest))));
+	return digest;
 }
 
 string SaltFilename(const char *encFilename)
@@ -238,6 +249,7 @@ int main()
 			cout << "Created: secondary-ed25519-privkey-enc.txt.salt" << endl;
 			cout << "Created: secondary-ed25519-pubkey.txt" << endl;
 			cout << "Created: secondary-ed25519-pubkey-sig.txt" << endl;
+			cout << "Key ID: " << ComputeKeyId(edPubkey) << endl;
 		}
 		else
 		{
@@ -248,6 +260,7 @@ int main()
 			cout << "Created: secondary-privkey-enc.txt.salt" << endl;
 			cout << "Created: secondary-pubkey.txt" << endl;
 			cout << "Created: secondary-pubkey-sig.txt" << endl;
+			cout << "Key ID: " << ComputeKeyId(pubkey) << endl;
 		}
 	}
 	catch(CryptoPP::Exception &err)

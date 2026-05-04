@@ -162,6 +162,43 @@ def test_tampered_xml_license_fails(tmp_root):
         raise AssertionError(proc.stdout)
 
 
+def test_revoked_key_is_blocked(tmp_root):
+    workdir = tmp_root / "revoked-key"
+    workdir.mkdir()
+
+    run_tool(workdir, "genmasterpair", "masterpass\n")
+    secondary = run_tool(workdir, "gensecondarypair", "masterpass\nsecondarypass\n")
+
+    key_id = None
+    for line in secondary.stdout.splitlines():
+        if line.startswith("Key ID: "):
+            key_id = line[len("Key ID: "):]
+            break
+    if key_id is None:
+        raise AssertionError(f"Key ID not found in gensecondarypair output\n{secondary.stdout}")
+
+    run_tool(workdir, "genlicense", "secondarypass\nLicensed to BOB\n")
+    run_tool(
+        workdir,
+        "genxmllicense",
+        "secondarypass\nJohn Doe, Big Institute, Belgium\nfeature1, feature2\n",
+    )
+
+    # Confirm both verifiers pass before revocation
+    run_tool(workdir, "verifylicense")
+    run_tool(workdir, "verifyxmllicense")
+
+    (workdir / "revoked-keys.txt").write_text(key_id + "\n", encoding="utf-8")
+
+    proc = run_tool(workdir, "verifylicense", expect_success=False)
+    if "Key revoked" not in proc.stdout:
+        raise AssertionError(f"expected revocation message from verifylicense\n{proc.stdout}")
+
+    proc_xml = run_tool(workdir, "verifyxmllicense", expect_success=False)
+    if "Key revoked" not in proc_xml.stdout:
+        raise AssertionError(f"expected revocation message from verifyxmllicense\n{proc_xml.stdout}")
+
+
 def test_wrong_master_key_fails(tmp_root):
     # Legitimate chain: M signs S, S signs license
     legit = tmp_root / "wrong-master-legit"
@@ -198,6 +235,7 @@ def main():
         test_tampered_private_key_fails(tmp_root)
         test_tampered_plain_license_fails(tmp_root)
         test_tampered_xml_license_fails(tmp_root)
+        test_revoked_key_is_blocked(tmp_root)
         test_wrong_master_key_fails(tmp_root)
     finally:
         shutil.rmtree(tmp_root)

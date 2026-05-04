@@ -16,8 +16,33 @@ using namespace std;
 #include <crypto++/files.h>
 #include <crypto++/pssr.h>
 #include <crypto++/sha.h>
+#include <crypto++/hex.h>
 #include <crypto++/xed25519.h>
 using namespace CryptoPP;
+
+string ComputeKeyId(const string& pubKeyBase64)
+{
+	string rawKey;
+	StringSource(pubKeyBase64, true, new Base64Decoder(new StringSink(rawKey)));
+	string digest;
+	SHA256 hash;
+	StringSource(rawKey, true, new HashFilter(hash, new HexEncoder(new StringSink(digest))));
+	return digest;
+}
+
+bool IsKeyRevoked(const string& keyId)
+{
+	ifstream f("revoked-keys.txt");
+	if (!f.good()) return false;
+	string line;
+	while (getline(f, line))
+	{
+		if (!line.empty() && line.back() == '\r')
+			line.pop_back();
+		if (line == keyId) return true;
+	}
+	return false;
+}
 
 vector<vector<string> > ParseInfo(xmlNode *el)
 {
@@ -302,10 +327,19 @@ int Verify(const char *filename)
 		cout << "Key RSA-PSS signature ret:" << keyRet << endl;
 	}
 
+	string keyContent = hasEdLicense ? data["edkey"] : data["key"];
+	string keyId = ComputeKeyId(keyContent);
+	int revRet = 1;
+	if (IsKeyRevoked(keyId))
+	{
+		cout << "Key revoked: " << keyId << endl;
+		revRet = 0;
+	}
+
 	//free the document
 	xmlFreeDoc(doc);
 
-	return infoRet && keyRet;
+	return infoRet && keyRet && revRet;
 
 }
 
