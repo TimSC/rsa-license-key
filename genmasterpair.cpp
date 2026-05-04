@@ -4,6 +4,7 @@
 #include <string>
 #include <cstring>
 using namespace std;
+#include "readpass.hpp"
 #include <crypto++/rsa.h>
 #include <crypto++/osrng.h>
 #include <crypto++/base64.h>
@@ -135,16 +136,23 @@ int main(int argc, char **argv)
 	}
 
 	cout << "Enter new master key password" << endl;
-	string pass;
-	cin >> pass;
+	string pass = ReadPassword();
 
 	AutoSeededRandomPool rng;
 	if (useEd25519)
 	{
 		GenEd25519KeyPair(pass, rng);
+		cout << "Created: master-ed25519-privkey-enc.txt" << endl;
+		cout << "Created: master-ed25519-privkey-iv.txt" << endl;
+		cout << "Created: master-ed25519-privkey-enc.txt.salt" << endl;
+		cout << "Created: master-ed25519-pubkey.txt" << endl;
 	}
 	else
 	{
 		GenRsaKeyPair(pass, rng);
+		cout << "Created: master-privkey-enc.txt" << endl;
+		cout << "Created: master-privkey-iv.txt" << endl;
+		cout << "Created: master-privkey-enc.txt.salt" << endl;
+		cout << "Created: master-pubkey.txt" << endl;
 	}
 }

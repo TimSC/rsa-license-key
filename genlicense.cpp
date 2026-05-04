@@ -6,6 +6,7 @@
 #include <exception>
 #include <limits>
 using namespace std;
+#include "readpass.hpp"
 #include <crypto++/rsa.h>
 #include <crypto++/osrng.h>
 #include <crypto++/base64.h>
@@ -126,8 +127,7 @@ void SignLicenseEd25519(AutoSeededRandomPool &rng, string strContents, string pa
 int main()
 {
 	cout << "Enter existing secondary key password" << endl;
-	string pass;
-	cin >> pass;
+	string pass = ReadPassword();
 
 	AutoSeededRandomPool rng;
 	cout << "Enter license text" << endl;
@@ -151,10 +151,14 @@ int main()
 			FileSink out("license.txt");
 			out.Put((CryptoPP::byte const*) licenseText.data(), licenseText.size());
 			SignLicenseEd25519(rng, licenseText, pass);
+			cout << "Created: license.txt" << endl;
+			cout << "Created: license-ed25519-sig.txt" << endl;
 		}
 		else
 		{
 			SignLicense(rng, licenseText, pass);
+			cout << "Created: license.txt" << endl;
+			cout << "Created: license-sig.txt" << endl;
 		}
 	}
 	catch(CryptoPP::Exception &err)

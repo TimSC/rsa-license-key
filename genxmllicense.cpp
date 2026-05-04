@@ -7,7 +7,9 @@
 #include <sstream>
 #include <stdexcept>
 #include <algorithm>
+#include <limits>
 using namespace std;
+#include "readpass.hpp"
 #include <crypto++/rsa.h>
 #include <crypto++/osrng.h>
 #include <crypto++/base64.h>
@@ -181,19 +183,27 @@ string GetFileContent(string filename)
 int main()
 {
 	cout << "Enter existing secondary key password" << endl;
-	string pass;
-	cin >> pass;
+	string pass = ReadPassword();
+	cin.ignore(numeric_limits<streamsize>::max(), '\n');
+
+	cout << "Enter licensee info" << endl;
+	string licensee;
+	getline(cin, licensee);
+
+	cout << "Enter license type" << endl;
+	string functions;
+	getline(cin, functions);
 
 	vector<vector<std::string> > info;
 	
 	vector<string> pair;
 	pair.push_back("licensee");
-	pair.push_back("John Doe, Big Institute, Belgium");
+	pair.push_back(licensee);
 	info.push_back(pair);
 
 	pair.clear();
-	pair.push_back("functions");
-	pair.push_back("feature1, feature2");
+	pair.push_back("type");
+	pair.push_back(functions);
 	info.push_back(pair);
 
 	string serialisedInfo = SerialiseKeyPairs(info);
@@ -248,6 +258,7 @@ int main()
 
 		ofstream out("xmllicense.xml");
 		out << xml;
+		cout << "Created: xmllicense.xml" << endl;
 	}
 	catch(CryptoPP::Exception &err)
 	{

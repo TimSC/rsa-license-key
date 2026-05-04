@@ -5,6 +5,7 @@
 #include <fstream>
 #include <exception>
 using namespace std;
+#include "readpass.hpp"
 #include <crypto++/rsa.h>
 #include <crypto++/osrng.h>
 #include <crypto++/base64.h>
@@ -211,12 +212,10 @@ void SignSecondaryEd25519Key(AutoSeededRandomPool &rng, string strContents, stri
 int main()
 {
 	cout << "Enter existing master key password" << endl;
-	string pass;
-	cin >> pass;
+	string pass = ReadPassword();
 
 	cout << "Enter new secondary key password" << endl;
-	string pass2;
-	cin >> pass2;
+	string pass2 = ReadPassword();
 
 	try
 	{
@@ -234,11 +233,21 @@ int main()
 		{
 			string edPubkey = GenEd25519KeyPair(rng, pass2);
 			SignSecondaryEd25519Key(rng, edPubkey, pass);
+			cout << "Created: secondary-ed25519-privkey-enc.txt" << endl;
+			cout << "Created: secondary-ed25519-privkey-iv.txt" << endl;
+			cout << "Created: secondary-ed25519-privkey-enc.txt.salt" << endl;
+			cout << "Created: secondary-ed25519-pubkey.txt" << endl;
+			cout << "Created: secondary-ed25519-pubkey-sig.txt" << endl;
 		}
 		else
 		{
 			string pubkey = GenKeyPair(rng, pass2);
 			SignSecondaryKey(rng, pubkey, pass);
+			cout << "Created: secondary-privkey-enc.txt" << endl;
+			cout << "Created: secondary-privkey-iv.txt" << endl;
+			cout << "Created: secondary-privkey-enc.txt.salt" << endl;
+			cout << "Created: secondary-pubkey.txt" << endl;
+			cout << "Created: secondary-pubkey-sig.txt" << endl;
 		}
 	}
 	catch(CryptoPP::Exception &err)

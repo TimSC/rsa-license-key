@@ -44,7 +44,11 @@ def test_ed25519_flow(tmp_root):
     run_tool(workdir, "genmasterpair", "masterpass\n")
     run_tool(workdir, "gensecondarypair", "masterpass\nsecondarypass\n")
     run_tool(workdir, "genlicense", "secondarypass\nLicensed to BOB\n")
-    run_tool(workdir, "genxmllicense", "secondarypass\n")
+    run_tool(
+        workdir,
+        "genxmllicense",
+        "secondarypass\nJohn Doe, Big Institute, Belgium\nfeature1, feature2\n",
+    )
 
     verify = run_tool(workdir, "verifylicense")
     if "Secondary Ed25519 Key OK" not in verify.stdout:
@@ -74,7 +78,11 @@ def test_rsa_flow(tmp_root):
     run_tool(workdir, "genmasterpair", "masterpass\n", args=("--rsa",))
     run_tool(workdir, "gensecondarypair", "masterpass\nsecondarypass\n")
     run_tool(workdir, "genlicense", "secondarypass\nLicensed to BOB\n")
-    run_tool(workdir, "genxmllicense", "secondarypass\n")
+    run_tool(
+        workdir,
+        "genxmllicense",
+        "secondarypass\nJohn Doe, Big Institute, Belgium\nfeature1, feature2\n",
+    )
 
     verify = run_tool(workdir, "verifylicense")
     if "Secondary RSA-PSS Key OK" not in verify.stdout:
@@ -138,7 +146,11 @@ def test_tampered_xml_license_fails(tmp_root):
 
     run_tool(workdir, "genmasterpair", "masterpass\n")
     run_tool(workdir, "gensecondarypair", "masterpass\nsecondarypass\n")
-    run_tool(workdir, "genxmllicense", "secondarypass\n")
+    run_tool(
+        workdir,
+        "genxmllicense",
+        "secondarypass\nJohn Doe, Big Institute, Belgium\nfeature1, feature2\n",
+    )
 
     xml_path = workdir / "xmllicense.xml"
     xml = xml_path.read_text(encoding="utf-8")
