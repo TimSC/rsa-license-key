@@ -162,6 +162,34 @@ def test_tampered_xml_license_fails(tmp_root):
         raise AssertionError(proc.stdout)
 
 
+def test_wrong_master_key_fails(tmp_root):
+    # Legitimate chain: M signs S, S signs license
+    legit = tmp_root / "wrong-master-legit"
+    legit.mkdir()
+    run_tool(legit, "genmasterpair", "masterpass\n")
+    run_tool(legit, "gensecondarypair", "masterpass\nsecondarypass\n")
+
+    # Rogue chain: M2 signs S2, S2 signs same license text
+    rogue = tmp_root / "wrong-master-rogue"
+    rogue.mkdir()
+    run_tool(rogue, "genmasterpair", "masterpass2\n")
+    run_tool(rogue, "gensecondarypair", "masterpass2\nsecondarypass2\n")
+    run_tool(rogue, "genlicense", "secondarypass2\nLicensed to BOB\n")
+
+    # Verification dir: trusted anchor is M, but secondary key and license are from the rogue chain
+    attack = tmp_root / "wrong-master-attack"
+    attack.mkdir()
+    shutil.copy(legit / "master-ed25519-pubkey.txt", attack / "master-ed25519-pubkey.txt")
+    shutil.copy(rogue / "secondary-ed25519-pubkey.txt", attack / "secondary-ed25519-pubkey.txt")
+    shutil.copy(rogue / "secondary-ed25519-pubkey-sig.txt", attack / "secondary-ed25519-pubkey-sig.txt")
+    shutil.copy(rogue / "license.txt", attack / "license.txt")
+    shutil.copy(rogue / "license-ed25519-sig.txt", attack / "license-ed25519-sig.txt")
+
+    proc = run_tool(attack, "verifylicense", expect_success=False)
+    if "Secondary Ed25519 Key OK" in proc.stdout:
+        raise AssertionError(f"verifier accepted a secondary key signed by a different master\n{proc.stdout}")
+
+
 def main():
     tmp_root = Path(tempfile.mkdtemp(prefix="rsa-license-key-tests."))
     try:
@@ -170,6 +198,7 @@ def main():
         test_tampered_private_key_fails(tmp_root)
         test_tampered_plain_license_fails(tmp_root)
         test_tampered_xml_license_fails(tmp_root)
+        test_wrong_master_key_fails(tmp_root)
     finally:
         shutil.rmtree(tmp_root)
 
